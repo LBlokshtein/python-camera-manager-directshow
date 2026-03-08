@@ -36,8 +36,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/<your-username>/<your-repo>"
-Repository = "https://github.com/<your-username>/<your-repo>"
+Homepage = "https://github.com/LBlokshtein/python-camera-manager-directshow.git"
+Repository = "https://github.com/LBlokshtein/python-camera-manager-directshow.git"
 
 [project.scripts]
 camera-manager = "app.main:main"
