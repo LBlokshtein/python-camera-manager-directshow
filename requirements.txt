@@ -1,0 +1,3 @@
+pythonnet
+opencv-python
+Pillow

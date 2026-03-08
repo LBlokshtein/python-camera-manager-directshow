@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Logs and runtime artifacts
+CameraDeviceLog.txt
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/

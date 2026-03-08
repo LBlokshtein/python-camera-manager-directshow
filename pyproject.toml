@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-camera-manager-directshow"
+version = "0.1.0"
+description = "Python camera manager with DirectShow capability discovery and .NET bridge integration"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Lior Blokshtein" }
+]
+dependencies = [
+  "pythonnet",
+  "opencv-python",
+  "Pillow"
+]
+keywords = [
+  "camera",
+  "directshow",
+  "pythonnet",
+  "opencv",
+  "computer-vision"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Multimedia :: Video :: Capture",
+  "Topic :: Software Development :: Libraries"
+]
+
+[project.urls]
+Homepage = "https://github.com/<your-username>/<your-repo>"
+Repository = "https://github.com/<your-username>/<your-repo>"
+
+[project.scripts]
+camera-manager = "app.main:main"
+
+[tool.setuptools]
+packages = ["app", "camera", "GUI"]
