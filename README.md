@@ -195,7 +195,11 @@ This project demonstrates:
 
 ## Companion .NET Repository
 
-The .NET wrapper is intended to be maintained as a separate repository. This Python repository consumes the compiled artifacts and focuses on Python API ergonomics and application usage.
+The .NET wrapper source code is maintained in a separate repository:
+
+- https://github.com/LBlokshtein/DirectShowLibWrapper
+
+This Python repository consumes the compiled artifacts and focuses on Python API ergonomics and application usage.
 
 ## License
 
