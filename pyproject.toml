@@ -43,4 +43,7 @@ Repository = "https://github.com/LBlokshtein/python-camera-manager-directshow.gi
 camera-manager = "app.main:main"
 
 [tool.setuptools]
-packages = ["app", "camera", "GUI"]
+packages = ["app", "camera", "GUI", "runtime", "runtime.dotnet"]
+
+[tool.setuptools.package-data]
+"runtime.dotnet" = ["*.dll"]

@@ -104,6 +104,14 @@ Streaming without OpenCV is supported only when the camera output is already an 
 
 ## Setup
 
+Install from PyPI (after package publication):
+
+```bash
+pip install python-camera-manager-directshow
+```
+
+Install from source (current repository):
+
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
