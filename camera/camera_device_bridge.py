@@ -7,12 +7,62 @@ import threading
 import time
 from types import SimpleNamespace
 from enum import Enum, IntEnum
-from typing import Optional, Callable, Tuple
+from typing import Optional, Callable, Tuple, Sequence, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from camera.camera_manager import CameraFormat
+
+DebugLoggingConfig = Union[bool, int, Sequence[bool]]
 
 try:
     import cv2
 except Exception:
     cv2 = None
+
+_turbojpeg_status_message = None
+_turbojpeg_status_tier = None
+
+try:
+    from turbojpeg import TurboJPEG as _TurboJPEG
+
+    # Try common Windows libjpeg-turbo DLL locations first, then TURBOJPEG_LIB_PATH.
+    # Native DLL is required for PyTurboJPEG acceleration.
+    # You can install libjpeg-turbo from - https://github.com/libjpeg-turbo/libjpeg-turbo/releases
+    _turbojpeg_decoder = None
+    _turbojpeg_init_error = None
+    _turbojpeg_candidate_paths = [
+        r"C:\libjpeg-turbo-gcc64\bin\libturbojpeg.dll",
+        r"C:\libjpeg-turbo64\bin\turbojpeg.dll",
+        r"C:\libjpeg-turbo64\bin\libturbojpeg.dll",
+        os.environ.get("TURBOJPEG_LIB_PATH"),
+    ]
+
+    for _dll_path in _turbojpeg_candidate_paths:
+        if not _dll_path:
+            continue
+        if not os.path.isfile(_dll_path):
+            continue
+        try:
+            _turbojpeg_decoder = _TurboJPEG(lib_path=_dll_path)
+            _turbojpeg_status_message = f"turbojpeg loaded from {_dll_path}"
+            _turbojpeg_status_tier = 1
+            break
+        except Exception as _explicit_err:
+            _turbojpeg_init_error = _explicit_err
+
+    if _turbojpeg_decoder is None:
+        try:
+            _turbojpeg_decoder = _TurboJPEG()
+            _turbojpeg_status_message = "turbojpeg loaded via auto-discovery"
+            _turbojpeg_status_tier = 1
+        except Exception as _auto_err:
+            _turbojpeg_init_error = _auto_err
+            _turbojpeg_status_message = f"turbojpeg unavailable: {_turbojpeg_init_error}"
+            _turbojpeg_status_tier = 2
+except Exception as _import_err:
+    _turbojpeg_status_message = f"turbojpeg import failed: {_import_err}"
+    _turbojpeg_status_tier = 2
+    _turbojpeg_decoder = None
 
 
 class DebugTier(IntEnum):
@@ -37,12 +87,13 @@ class CameraDeviceBridge:
     DEBUG_TIER_ERROR = DebugTier.ERROR
     DebugTier = DebugTier
     CaptureMode = CaptureMode
+    _turbojpeg_status_reported = False
 
     def __init__(
         self,
         device_path: str,
         camera_format: Optional['CameraFormat'] = None,
-        debug_logging: bool = False,
+        debug_logging: DebugLoggingConfig = False,
         request_rgb24_conversion: bool = False
     ):
         """
@@ -92,6 +143,8 @@ class CameraDeviceBridge:
             self.debug_tiers_enabled[self.DEBUG_TIER_VERBOSE] = True
             self.debug_tiers_enabled[self.DEBUG_TIER_ERROR] = True
 
+        self._log_turbojpeg_status_once()
+
         self._current_frame = None
         self._frame_state_lock = threading.Lock()
         self._event_subscription = None  # Keep reference to event handler
@@ -100,6 +153,22 @@ class CameraDeviceBridge:
         self._warned_mjpg_decoder_unavailable = False
         self._refresh_cached_format_metadata()
         self._initialize_bridge(device_path, camera_format)
+
+    def _log_turbojpeg_status_once(self):
+        """
+        ==========================================
+        Emit one-time TurboJPEG initialization status using bridge debug tiers.
+        ==========================================
+        """
+        if CameraDeviceBridge._turbojpeg_status_reported:
+            return
+
+        if _turbojpeg_status_message is None:
+            return
+
+        tier = int(_turbojpeg_status_tier or self.DEBUG_TIER_VERBOSE)
+        self.debug_print(_turbojpeg_status_message, tier)
+        CameraDeviceBridge._turbojpeg_status_reported = True
 
     def _refresh_cached_format_metadata(self):
         """
@@ -493,12 +562,16 @@ class CameraDeviceBridge:
                 sys.path.append(candidate)
         
         try:
-            # Add references to .NET DLLs
-            clr.AddReference("DirectShowLib")
-            clr.AddReference("DirectShowLibWrapper")
+            # Add references to .NET DLLs via dynamic lookup so type checkers
+            # do not flag pythonnet's runtime-provided attributes.
+            add_reference = getattr(clr, "AddReference")
+            add_reference("DirectShowLib")
+            add_reference("DirectShowLibWrapper")
             
             # Import the CameraDevice class and CameraFormat struct
-            from DirectShowLibWrapper import CameraDevice, CameraFormat as DotNetCameraFormat
+            dotnet_wrapper = __import__("DirectShowLibWrapper")
+            CameraDevice = getattr(dotnet_wrapper, "CameraDevice")
+            DotNetCameraFormat = getattr(dotnet_wrapper, "CameraFormat")
             self._camera_device_class = CameraDevice
             
             # Create the device with or without format specification
@@ -672,6 +745,26 @@ class CameraDeviceBridge:
         except Exception as e:
             self.debug_print(f"Error getting current FPS: {e}", self.DEBUG_TIER_ERROR)
             return 0.0
+
+    def get_active_mjpg_decoder_name(self) -> Optional[str]:
+        """
+        ==========================================
+        Report which decoder is currently used for MJPG/MJPEG frames.
+
+        Returns:
+            Optional[str]: "TurboJPEG", "OpenCV", "Unavailable", or None when
+            current format is not MJPG/MJPEG.
+        ==========================================
+        """
+        pixel_format = self._normalized_pixel_format_name()
+        if pixel_format not in ("MJPG", "MJPEG"):
+            return None
+
+        if _turbojpeg_decoder is not None:
+            return "TurboJPEG"
+        if cv2 is not None:
+            return "OpenCV"
+        return "Unavailable"
 
     def get_actual_camera_format(self):
         """
@@ -1059,14 +1152,13 @@ class CameraDeviceBridge:
         """
         try:
             pixel_format = self._pixel_format_name
-
             # MJPG path: decode compressed JPEG payload using the exact buffer length
             # reported by the frame callback.
             if pixel_format in ("MJPG", "MJPEG"):
-                if cv2 is None:
+                if _turbojpeg_decoder is None and cv2 is None:
                     if not self._warned_mjpg_decoder_unavailable:
                         self.debug_print(
-                            "MJPG decode requires OpenCV (cv2), but cv2 is not available. Frame skipped.",
+                            "MJPG decode requires turbojpeg or OpenCV (cv2), but neither is available. Frame skipped.",
                             self.DEBUG_TIER_ERROR
                         )
                         self._warned_mjpg_decoder_unavailable = True
@@ -1087,8 +1179,20 @@ class CameraDeviceBridge:
 
                 encoded_length = int(buffer_len)
                 encoded_buffer = (ctypes.c_ubyte * encoded_length).from_address(ptr)
-                encoded_array = np.ctypeslib.as_array(encoded_buffer)
-                decoded_frame = cv2.imdecode(encoded_array, cv2.IMREAD_COLOR)
+
+                decoded_frame = None
+                if _turbojpeg_decoder is not None:
+                    # TurboJPEG is faster than cv2.imdecode (SIMD-accelerated libjpeg-turbo).
+                    # decode() returns a new BGR array — no extra copy needed.
+                    try:
+                        self._debug(f"[Process] TurboJPEG decode")
+                        decoded_frame = _turbojpeg_decoder.decode(bytes(encoded_buffer))
+                    except Exception as tj_err:
+                        self.debug_print(f"[Process] TurboJPEG decode failed, falling back to cv2: {tj_err}", self.DEBUG_TIER_ERROR)
+
+                if decoded_frame is None and cv2 is not None:
+                    encoded_array = np.ctypeslib.as_array(encoded_buffer)
+                    decoded_frame = cv2.imdecode(encoded_array, cv2.IMREAD_COLOR)
 
                 if decoded_frame is None:
                     self.debug_print(
@@ -1097,13 +1201,12 @@ class CameraDeviceBridge:
                     )
                     return
 
-                stable_frame = decoded_frame.copy()
                 with self._frame_state_lock:
-                    self._current_frame = stable_frame
+                    self._current_frame = decoded_frame
                     callback = self._frame_callback
 
                 if callback:
-                    callback(frame_count, stable_frame)
+                    callback(frame_count, decoded_frame)
                 return
 
             # YUY2/YUYV path: decode packed YUV422 to BGR.

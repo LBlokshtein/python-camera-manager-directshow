@@ -1,127 +1,76 @@
 # Python Camera Manager (DirectShow Bridge)
 
-A Python-first camera control and preview application built on top of a .NET DirectShow wrapper.
+Python-first camera discovery, control, and live preview built on top of a .NET DirectShow wrapper.
 
 This project was created to solve a common limitation in OpenCV camera workflows: while OpenCV can open cameras quickly, it does not provide a reliable, discoverable, device-specific model of control capabilities (valid ranges, step sizes, defaults, and auto/manual support) across many webcams.
 
-This codebase provides that missing layer:
+## Highlights
 
-- discover camera capabilities and supported formats using DirectShow
-- expose those capabilities as plain Python data structures
-- open and stream camera frames through the same API
-- optionally use this metadata with another capture backend (for example OpenCV)
+- Discover connected cameras.
+- Query supported formats per device.
+- Query control ranges and flags (min/max/step/default/current, supported, auto supported, auto enabled).
+- Open camera streams through DirectShow from Python.
+- Change auto/manual modes and set property values.
+- Preview frames in a PyQt5 GUI.
+- Decode MJPG using PyTurboJPEG first (when available), with OpenCV fallback.
 
-## Why This Project Exists
+## Architecture
 
-In many practical camera applications, you need to know more than whether a property exists. You need to know:
+- .NET layer in `runtime/dotnet`:
+  - `DirectShowLib.dll`
+  - `DirectShowLibWrapper.dll`
+- Python bridge layer:
+  - `camera/camera_inspector_bridge.py`
+  - `camera/camera_device_bridge.py`
+- Python facade/API:
+  - `camera/camera_manager.py`
+- GUI:
+  - `GUI/main_GUI.py` (PyQt5)
 
-- minimum and maximum values
-- step increments
-- default values
-- current values
-- whether auto mode is supported
-- whether auto mode is currently enabled
-
-OpenCV alone does not consistently provide this level of introspection across devices and drivers. This project addresses that gap by using DirectShow (via a .NET wrapper) for capability discovery and control, then exposing a clean Python API for application code.
-
-## Core Design
-
-### .NET for camera graph and capability access
-
-The .NET layer (`DirectShowLibWrapper.dll`) handles DirectShow-specific operations such as:
-
-- camera enumeration
-- supported format discovery
-- capability/range discovery
-- frame acquisition
-- camera property set/get with auto/manual modes
-
-### Python bridge for usability
-
-The Python bridge files:
-
-- `camera/camera_inspector_bridge.py`
-- `camera/camera_device_bridge.py`
-
-load the .NET assemblies and call into the wrapper.
-
-### Python manager for developer experience
-
-`camera/camera_manager.py` is the high-level facade.
-
-It converts .NET objects into Python-native types (`NamedTuple`, `dict`, `list`) so downstream code does not need to work with .NET object syntax. The output is intentionally Pythonic and user-friendly.
-
-In other words, consumers can use the API without needing to understand .NET interop details.
-
-## What You Can Do With It
-
-1. Full managed workflow
-- discover devices, formats, ranges
-- open camera and stream frames
-- change auto/manual modes
-- set precise property values based on discovered constraints
-- format note: without OpenCV installed, streaming requires uncompressed formats (for example RGB24/BGR24/GRAY8). MJPG and YUY2 decoding paths require OpenCV.
-
-2. Hybrid workflow
-- use this project only for camera capability discovery (ranges, steps, auto support)
-- then open/stream with another backend (such as OpenCV) if preferred
-
-This gives you flexibility to mix tooling while still relying on robust capability metadata.
-
-## Repository Structure
-
-```text
-
-app/
-  main.py                      # Main runnable application entrypoint
-camera/
-  __init__.py
-  camera_manager.py            # High-level Python API and cache
-  camera_device_bridge.py      # Frame/camera control bridge into .NET
-  camera_inspector_bridge.py   # Camera discovery/capability bridge into .NET
-GUI/
-  main_GUI.py                  # Tkinter UI
-runtime/
-  dotnet/
-    DirectShowLib.dll
-    DirectShowLibWrapper.dll
-```
+`camera/camera_manager.py` exposes Python-native objects (`NamedTuple`, `dict`, `list`) so consumers do not need to deal with .NET object APIs directly.
 
 ## Requirements
 
 - Windows (DirectShow)
-- Python 3.10+ (recommended)
-- .NET runtime compatible with your `DirectShowLibWrapper.dll`
-- A DirectShow-capable camera device
+- Python 3.10+
+- .NET runtime compatible with the shipped wrapper DLLs
+- DirectShow-capable camera
 
-Python packages:
+Python dependencies:
 
 - `pythonnet`
-- `opencv-python` (required for MJPG and YUY2 decode paths)
+- `opencv-python`
 - `Pillow`
+- `PyQt5`
 
-Streaming without OpenCV is supported only when the camera output is already an uncompressed format handled by the bridge (for example `RGB24`, `BGR24`, or `GRAY8`).
+Optional for faster MJPG decode:
+
+- `PyTurboJPEG==2.2.0`
+- `libjpeg-turbo` native DLL (`turbojpeg.dll` or `libturbojpeg.dll`)
+
+`PyTurboJPEG` is not required for base functionality and is intentionally not included in default package dependencies.
 
 ## Setup
 
-Install from PyPI (after package publication):
-
 ```bash
-pip install python-camera-manager-directshow
-```
-
-Install from source (current repository):
-
-```bash
-python -m venv .venv
+py -m venv .venv
 .venv\Scripts\activate
-pip install pythonnet opencv-python Pillow
+python -m pip install -U pip
+python -m pip install -e .
 ```
 
-Ensure these assemblies exist:
+If you want accelerated MJPG decode:
 
-- `runtime/dotnet/DirectShowLib.dll`
-- `runtime/dotnet/DirectShowLibWrapper.dll`
+```bash
+python -m pip install PyTurboJPEG==2.2.0
+```
+
+Without `PyTurboJPEG`, MJPG decoding falls back to OpenCV automatically.
+
+Notes:
+
+- Do not install the unrelated package named `turbojpeg` (different project, different API).
+- If needed, point to your native turbojpeg DLL with `TURBOJPEG_LIB_PATH`.
 
 ## Run
 
@@ -135,14 +84,18 @@ Alternative:
 python app/main.py
 ```
 
-## API Example (Python-native usage)
+If installed as a package entry point:
+
+```bash
+camera-manager
+```
+
+## Quick API Example
 
 ```python
 from camera.camera_manager import Camera
 
-# Discover all cameras with formats and control ranges
 devices = Camera.get_connected_cameras(get_formats=True, get_ranges=True)
-
 if not devices:
     raise RuntimeError("No camera detected")
 
@@ -150,64 +103,76 @@ selected = devices[0]
 fmt = selected.formats[0]
 
 cam = Camera(debug_logging=False)
-cam.open(selected.path, fmt, request_rgb24_conversion=False)
+ok = cam.open(selected.path, fmt, request_rgb24_conversion=False)
+if not ok:
+    raise RuntimeError("Failed to open camera")
 
-# Ranges are plain Python structures
-ranges = cam.property_ranges
-exposure = ranges.get("Exposure")
-if exposure and exposure.property_supported:
-    # Respect discovered min/max/step
-    cam.set_property_auto_mode("Exposure", False)
-    cam.set_property_value("Exposure", int(exposure.default))
+try:
+    exposure = cam.property_ranges.get("Exposure")
+    if exposure and exposure.property_supported:
+        cam.set_property_auto_mode("Exposure", False)
+        cam.set_property_value("Exposure", int(exposure.default))
 
-ok, frame = cam.get_frame()
-cam.close()
+    success, frame = cam.get_frame()
+finally:
+    cam.close()
 ```
 
-## Hybrid Example (Use metadata here, capture elsewhere)
+## Decoder Behavior (MJPG)
 
-```python
-import cv2
-from camera.camera_manager import Camera
+For MJPG/MJPEG formats, decode priority is:
 
-devices = Camera.get_connected_cameras(get_formats=False, get_ranges=True)
-if not devices:
-    raise RuntimeError("No camera")
+1. PyTurboJPEG (if import + native DLL initialization succeeds)
+2. OpenCV `imdecode`
+3. Unavailable (frame skipped with error log)
 
-# Use discovered ranges for UI/validation logic
-ranges = devices[0].ranges
-print(ranges.get("Exposure"))
+For uncompressed formats (`RGB24`, `BGR24`, `GRAY8`, etc.), decoding does not require MJPG decoders.
 
-# Open camera with another backend if desired
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-ret, frame = cap.read()
-cap.release()
+## Troubleshooting
+
+### PyQt5 import error
+
+If you see `ModuleNotFoundError: No module named 'PyQt5'`, verify you are using the project venv and install dependencies:
+
+```bash
+.venv\Scripts\python.exe -m pip install -e .
 ```
 
-## Notes for Recruiters / Reviewers
+### Pylance false positives with Qt/pythonnet
 
-This project demonstrates:
+Some warnings are static-analysis false positives due to dynamic runtime APIs in PyQt/pythonnet. Use workspace-level Pylance settings in `.vscode/settings.json` to tune diagnostic severity as needed.
 
-- cross-language integration (.NET DirectShow + Python)
-- practical camera systems engineering
-- robust control-surface modeling (ranges, steps, auto/manual capabilities)
-- Python API design that hides interop complexity
-- real-time GUI integration and format negotiation
+### TurboJPEG confusion
 
-## Limitations
+If the wrong package was installed before, clean and reinstall:
 
-- Device behavior depends on camera driver and hardware implementation.
-- Some controls may be unsupported or partially supported on specific devices.
-- Only one process/backend should actively own a camera stream at a time.
-- MJPG and YUY2 decoding require OpenCV in the current implementation; without OpenCV, use uncompressed output formats.
+```bash
+.venv\Scripts\python.exe -m pip uninstall -y turbojpeg
+.venv\Scripts\python.exe -m pip install PyTurboJPEG==2.2.0
+```
+
+## Maintainer Release Checklist
+
+Before publishing an update:
+
+1. Bump `[project].version` in `pyproject.toml`.
+2. Keep `requirements.txt` and `pyproject.toml` dependencies aligned.
+3. Verify `project.urls` in `pyproject.toml` point to the correct repository.
+4. Confirm runtime DLLs are present under `runtime/dotnet`.
+5. Sanity test end-to-end:
+   - camera enumeration
+   - open/close
+   - frame preview
+   - property set/get
+6. Update README and changelog notes for behavior/API changes.
 
 ## Companion .NET Repository
 
-The .NET wrapper source code is maintained in a separate repository:
+The current Python project repository is:
 
 - https://github.com/LBlokshtein/DirectShowLibWrapper
 
-This Python repository consumes the compiled artifacts and focuses on Python API ergonomics and application usage.
+The .NET wrapper source code is maintained separately; this repository focuses on Python API ergonomics and application usage.
 
 ## License
 

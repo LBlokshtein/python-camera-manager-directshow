@@ -1,5 +1,5 @@
 from .camera_device_bridge import CameraDeviceBridge
-from typing import NamedTuple, List, Optional, Dict, Sequence, Union
+from typing import NamedTuple, List, Optional, Dict, Sequence, Union, Any, cast
 import threading
 from enum import Enum
 
@@ -390,7 +390,10 @@ class Camera:
         ==========================================
         """
         Camera._ensure_bridge()
-        raw_ranges = Camera._camera_bridge.get_camera_ranges(device_path) or []
+        bridge = Camera._camera_bridge
+        if bridge is None:
+            return {}
+        raw_ranges = cast(List[Any], bridge.get_camera_ranges(device_path) or [])
         
         # Consistent with get_connected_cameras
         return {
@@ -416,7 +419,10 @@ class Camera:
         ==========================================
         """
         Camera._ensure_bridge()
-        raw_formats = Camera._camera_bridge.get_camera_formats(device_path) or []
+        bridge = Camera._camera_bridge
+        if bridge is None:
+            return []
+        raw_formats = cast(List[Any], bridge.get_camera_formats(device_path) or [])
         
         python_formats = []
         seen_signatures = set() 
@@ -470,7 +476,10 @@ class Camera:
     @staticmethod
     def get_connected_cameras(get_formats=False, get_ranges=False):
         Camera._ensure_bridge()
-        uvc_devices_raw = Camera._camera_bridge.get_connected_cameras() or []
+        bridge = Camera._camera_bridge
+        if bridge is None:
+            return []
+        uvc_devices_raw = cast(List[Any], bridge.get_connected_cameras() or [])
         uvc_devices_python_style = []
 
         for device in uvc_devices_raw:
@@ -735,6 +744,23 @@ class Camera:
             return 0.0
 
         return float(self.device_bridge.get_current_fps())
+
+    def get_active_mjpg_decoder_name(self):
+        """
+        ==========================================
+        Get the decoder used for MJPG/MJPEG frames.
+
+        Returns:
+            str | None: "TurboJPEG", "OpenCV", "Unavailable", or None when not MJPG/MJPEG.
+        ==========================================
+        """
+        if self.device_bridge is None:
+            return None
+
+        try:
+            return self.device_bridge.get_active_mjpg_decoder_name()
+        except Exception:
+            return None
 
     def _on_frame_ready(self, frame_count, frame):
         """

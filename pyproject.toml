@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-camera-manager-directshow"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python camera manager with DirectShow capability discovery and .NET bridge integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,7 +15,8 @@ authors = [
 dependencies = [
   "pythonnet",
   "opencv-python",
-  "Pillow"
+  "Pillow",
+  "PyQt5"
 ]
 keywords = [
   "camera",
@@ -36,8 +37,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/LBlokshtein/python-camera-manager-directshow.git"
-Repository = "https://github.com/LBlokshtein/python-camera-manager-directshow.git"
+Homepage = "https://github.com/LBlokshtein/python-camera-manager-directshow"
+Repository = "https://github.com/LBlokshtein/python-camera-manager-directshow"
 
 [project.scripts]
 camera-manager = "app.main:main"
