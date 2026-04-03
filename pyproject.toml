@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-camera-manager-directshow"
-version = "0.2.0"
+version = "0.2.1"
 description = "Python camera manager with DirectShow capability discovery and .NET bridge integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,10 +41,13 @@ Homepage = "https://github.com/LBlokshtein/python-camera-manager-directshow"
 Repository = "https://github.com/LBlokshtein/python-camera-manager-directshow"
 
 [project.scripts]
-camera-manager = "app.main:main"
+camera-manager = "DirectShow_Wrapper.app.main:main"
 
 [tool.setuptools]
-packages = ["app", "camera", "GUI", "runtime", "runtime.dotnet"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["DirectShow_Wrapper*"]
 
 [tool.setuptools.package-data]
-"runtime.dotnet" = ["*.dll"]
+"DirectShow_Wrapper.runtime.dotnet" = ["*.dll"]

@@ -16,18 +16,18 @@ This project was created to solve a common limitation in OpenCV camera workflows
 
 ## Architecture
 
-- .NET layer in `runtime/dotnet`:
+- .NET layer in `DirectShow_Wrapper/runtime/dotnet`:
   - `DirectShowLib.dll`
   - `DirectShowLibWrapper.dll`
 - Python bridge layer:
-  - `camera/camera_inspector_bridge.py`
-  - `camera/camera_device_bridge.py`
+  - `DirectShow_Wrapper/camera/camera_inspector_bridge.py`
+  - `DirectShow_Wrapper/camera/camera_device_bridge.py`
 - Python facade/API:
-  - `camera/camera_manager.py`
+  - `DirectShow_Wrapper/camera/camera_manager.py`
 - GUI:
-  - `GUI/main_GUI.py` (PyQt5)
+  - `DirectShow_Wrapper/GUI/main_GUI.py` (PyQt5)
 
-`camera/camera_manager.py` exposes Python-native objects (`NamedTuple`, `dict`, `list`) so consumers do not need to deal with .NET object APIs directly.
+`DirectShow_Wrapper/camera/camera_manager.py` exposes Python-native objects (`NamedTuple`, `dict`, `list`) so consumers do not need to deal with .NET object APIs directly.
 
 ## Requirements
 
@@ -75,13 +75,13 @@ Notes:
 ## Run
 
 ```bash
-python -m app.main
+python -m DirectShow_Wrapper.app.main
 ```
 
 Alternative:
 
 ```bash
-python app/main.py
+python -m DirectShow_Wrapper.app.main
 ```
 
 If installed as a package entry point:
@@ -93,7 +93,7 @@ camera-manager
 ## Quick API Example
 
 ```python
-from camera.camera_manager import Camera
+from DirectShow_Wrapper.camera.camera_manager import Camera
 
 devices = Camera.get_connected_cameras(get_formats=True, get_ranges=True)
 if not devices:
@@ -158,7 +158,7 @@ Before publishing an update:
 1. Bump `[project].version` in `pyproject.toml`.
 2. Keep `requirements.txt` and `pyproject.toml` dependencies aligned.
 3. Verify `project.urls` in `pyproject.toml` point to the correct repository.
-4. Confirm runtime DLLs are present under `runtime/dotnet`.
+4. Confirm runtime DLLs are present under `DirectShow_Wrapper/runtime/dotnet`.
 5. Sanity test end-to-end:
    - camera enumeration
    - open/close

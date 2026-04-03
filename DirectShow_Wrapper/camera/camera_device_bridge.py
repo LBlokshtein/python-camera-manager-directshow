@@ -10,7 +10,7 @@ from enum import Enum, IntEnum
 from typing import Optional, Callable, Tuple, Sequence, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from camera.camera_manager import CameraFormat
+    from .camera_manager import CameraFormat
 
 DebugLoggingConfig = Union[bool, int, Sequence[bool]]
 

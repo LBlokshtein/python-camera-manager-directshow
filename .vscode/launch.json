@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Camera Manager (module)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "DirectShow_Wrapper.app.main",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": true,
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Camera Manager (file)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/DirectShow_Wrapper/app/main.py",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": true,
+            "console": "integratedTerminal"
+        }
+    ]
+}
